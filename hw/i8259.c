@@ -668,7 +668,7 @@ qemu_irq *kvm_i8259_init(qemu_irq parent_irq)
 {
     PicState2 *s;
 
-    s = qemu_mallocz(sizeof(PicState2));
+    s = g_malloc0(sizeof(PicState2));
 
     kvm_pic_init1(0x20, &s->pics[0]);
     kvm_pic_init1(0xa0, &s->pics[1]);

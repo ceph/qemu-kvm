@@ -114,7 +114,7 @@ static void extboot_write_cmd(void *opaque, uint32_t addr, uint32_t value)
     cpu_physical_memory_write((value & 0xFFFF) << 4, (uint8_t *)&cmd,
                               sizeof(cmd));
     if (buf)
-        qemu_free(buf);
+        free(buf);
 }
 
 void extboot_init(BlockDriverState *bs)

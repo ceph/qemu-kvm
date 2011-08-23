@@ -801,7 +801,7 @@ static void free_dev_irq_entries(AssignedDevice *dev)
 
     for (i = 0; i < dev->irq_entries_nr; i++)
         kvm_del_routing_entry(&dev->entry[i]);
-    free(dev->entry);
+    g_free(dev->entry);
     dev->entry = NULL;
     dev->irq_entries_nr = 0;
 }
@@ -1088,7 +1088,7 @@ static void assigned_dev_update_msi(PCIDevice *pci_dev, unsigned int ctrl_pos)
 
     if (ctrl_byte & PCI_MSI_FLAGS_ENABLE) {
         int pos = ctrl_pos - PCI_MSI_FLAGS;
-        assigned_dev->entry = qemu_mallocz(sizeof(*(assigned_dev->entry)));
+        assigned_dev->entry = g_malloc0(sizeof(*(assigned_dev->entry)));
         assigned_dev->entry->u.msi.address_lo =
             pci_get_long(pci_dev->config + pos + PCI_MSI_ADDRESS_LO);
         assigned_dev->entry->u.msi.address_hi = 0;
@@ -1165,7 +1165,7 @@ static int assigned_dev_update_msix_mmio(PCIDevice *pci_dev)
 
     free_dev_irq_entries(adev);
     adev->irq_entries_nr = entries_nr;
-    adev->entry = qemu_mallocz(entries_nr * sizeof(*(adev->entry)));
+    adev->entry = g_malloc0(entries_nr * sizeof(*(adev->entry)));
 
     msix_entry.assigned_dev_id = msix_nr.assigned_dev_id;
     entries_nr = 0;

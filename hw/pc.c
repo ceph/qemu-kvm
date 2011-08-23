@@ -1047,11 +1047,11 @@ void pc_memory_init(MemoryRegion *system_memory,
                                 bios);
 
     if (extboot_drive) {
-        option_rom[nb_option_roms].name = qemu_strdup(EXTBOOT_FILENAME);
+        option_rom[nb_option_roms].name = g_strdup(EXTBOOT_FILENAME);
         option_rom[nb_option_roms].bootindex = 0;
         nb_option_roms++;
     }
-    option_rom[nb_option_roms].name = qemu_strdup(VAPIC_FILENAME);
+    option_rom[nb_option_roms].name = g_strdup(VAPIC_FILENAME);
     option_rom[nb_option_roms].bootindex = -1;
     nb_option_roms++;
 

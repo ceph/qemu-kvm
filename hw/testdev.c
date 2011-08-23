@@ -115,7 +115,7 @@ static int init_test_device(ISADevice *isa)
     register_ioport_write(0xe0, 1, 4, test_device_ioport_write, dev);
     register_ioport_write(0xe4, 1, 4, test_device_flush_page, dev);
     register_ioport_write(0x2000, 24, 1, test_device_irq_line, NULL);
-    iomem_buf = qemu_mallocz(0x10000);
+    iomem_buf = g_malloc0(0x10000);
     iomem = cpu_register_io_memory(test_iomem_read, test_iomem_write, NULL,
                                    DEVICE_NATIVE_ENDIAN);
     cpu_register_physical_memory(0xff000000, 0x10000, iomem);

@@ -348,8 +348,8 @@ int msix_init(struct PCIDevice *dev, unsigned short nentries,
         goto err_config;
 
     if (kvm_enabled() && kvm_irqchip_in_kernel()) {
-        dev->msix_irq_entries = qemu_malloc(nentries *
-                                            sizeof *dev->msix_irq_entries);
+        dev->msix_irq_entries = g_malloc(nentries *
+                                         sizeof *dev->msix_irq_entries);
     }
 
     dev->cap_present |= QEMU_PCI_CAP_MSIX;
@@ -395,7 +395,7 @@ int msix_uninit(PCIDevice *dev, MemoryRegion *bar)
     dev->msix_table_page = NULL;
     g_free(dev->msix_entry_used);
     dev->msix_entry_used = NULL;
-    qemu_free(dev->msix_irq_entries);
+    g_free(dev->msix_irq_entries);
     dev->msix_irq_entries = NULL;
     dev->cap_present &= ~QEMU_PCI_CAP_MSIX;
     return 0;
