@@ -982,9 +982,10 @@ static int assign_irq(AssignedDevice *dev)
     if (dev->irq_requested_type) {
         assigned_irq_data.flags = dev->irq_requested_type;
         r = kvm_deassign_irq(kvm_state, &assigned_irq_data);
-        /* -ENXIO means no assigned irq */
-        if (r && r != -ENXIO)
+        if (r) {
             perror("assign_irq: deassign");
+        }
+        dev->irq_requested_type = 0;
     }
 
     assigned_irq_data.flags = KVM_DEV_IRQ_GUEST_INTX;
