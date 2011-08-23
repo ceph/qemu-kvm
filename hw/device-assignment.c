@@ -1052,9 +1052,12 @@ void assigned_dev_update_irqs(void)
     dev = QLIST_FIRST(&devs);
     while (dev) {
         next = QLIST_NEXT(dev, next);
-        r = assign_irq(dev);
-        if (r < 0)
-            qdev_unplug(&dev->dev.qdev);
+        if (dev->irq_requested_type & KVM_DEV_IRQ_HOST_INTX) {
+            r = assign_irq(dev);
+            if (r < 0) {
+                qdev_unplug(&dev->dev.qdev);
+            }
+        }
         dev = next;
     }
 }
