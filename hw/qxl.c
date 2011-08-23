@@ -821,17 +821,15 @@ static void qxl_check_state(PCIQXLDevice *d)
 {
     QXLRam *ram = d->ram;
 
-    assert(SPICE_RING_IS_EMPTY(&ram->cmd_ring));
-    assert(SPICE_RING_IS_EMPTY(&ram->cursor_ring));
+    assert(!d->ssd.running || SPICE_RING_IS_EMPTY(&ram->cmd_ring));
+    assert(!d->ssd.running || SPICE_RING_IS_EMPTY(&ram->cursor_ring));
 }
 
 static void qxl_reset_state(PCIQXLDevice *d)
 {
-    QXLRam *ram = d->ram;
     QXLRom *rom = d->rom;
 
-    assert(!d->ssd.running || SPICE_RING_IS_EMPTY(&ram->cmd_ring));
-    assert(!d->ssd.running || SPICE_RING_IS_EMPTY(&ram->cursor_ring));
+    qxl_check_state(d);
     d->shadow_rom.update_id = cpu_to_le32(0);
     *rom = d->shadow_rom;
     qxl_rom_set_dirty(d);
@@ -1189,7 +1187,7 @@ async_common:
         }
         d->current_async = orig_io_port;
         qemu_mutex_unlock(&d->async_lock);
-        dprint(d, 2, "start async %d (%d)\n", io_port, val);
+        dprint(d, 2, "start async %d (%"PRId64")\n", io_port, val);
         break;
     default:
         break;
@@ -1305,7 +1303,8 @@ async_common:
         break;
     }
     case QXL_IO_FLUSH_SURFACES_ASYNC:
-        dprint(d, 1, "QXL_IO_FLUSH_SURFACES_ASYNC (%d) (%s, s#=%d, res#=%d)\n",
+        dprint(d, 1, "QXL_IO_FLUSH_SURFACES_ASYNC"
+                     " (%"PRId64") (%s, s#=%d, res#=%d)\n",
                val, qxl_mode_to_string(d->mode), d->guest_surfaces.count,
                d->num_free_res);
         qxl_spice_flush_surfaces_async(d);
@@ -1599,7 +1598,7 @@ static int qxl_init_primary(PCIDevice *dev)
         ram_size = 32 * 1024 * 1024;
     }
     vga_common_init(vga, ram_size);
-    vga_init(vga);
+    vga_init(vga, pci_address_space(dev));
     register_ioport_write(0x3c0, 16, 1, qxl_vga_ioport_write, vga);
     register_ioport_write(0x3b4,  2, 1, qxl_vga_ioport_write, vga);
     register_ioport_write(0x3d4,  2, 1, qxl_vga_ioport_write, vga);
@@ -1698,7 +1697,7 @@ static int qxl_post_load(void *opaque, int version)
         qxl_create_guest_primary(d, 1, QXL_SYNC);
 
         /* replay surface-create and cursor-set commands */
-        cmds = qemu_mallocz(sizeof(QXLCommandExt) * (NUM_SURFACES + 1));
+        cmds = g_malloc0(sizeof(QXLCommandExt) * (NUM_SURFACES + 1));
         for (in = 0, out = 0; in < NUM_SURFACES; in++) {
             if (d->guest_surfaces.cmds[in] == 0) {
                 continue;
@@ -1713,7 +1712,7 @@ static int qxl_post_load(void *opaque, int version)
         cmds[out].group_id = MEMSLOT_GROUP_GUEST;
         out++;
         qxl_spice_loadvm_commands(d, cmds, out);
-        qemu_free(cmds);
+        g_free(cmds);
 
         break;
     case QXL_MODE_COMPAT:

@@ -254,8 +254,8 @@ int msi_init(struct PCIDevice *dev, uint8_t offset,
     }
 
     if (kvm_enabled() && kvm_irqchip_in_kernel()) {
-        dev->msi_irq_entries = qemu_malloc(nr_vectors *
-                                           sizeof(*dev->msix_irq_entries));
+        dev->msi_irq_entries = g_malloc(nr_vectors *
+                                        sizeof(*dev->msix_irq_entries));
     }
 
     return config_offset;
@@ -274,7 +274,7 @@ void msi_uninit(struct PCIDevice *dev)
 
     if (kvm_enabled() && kvm_irqchip_in_kernel()) {
         kvm_msi_free(dev);
-        qemu_free(dev->msi_irq_entries);
+        g_free(dev->msi_irq_entries);
     }
 
     pci_del_capability(dev, PCI_CAP_ID_MSI, cap_size);

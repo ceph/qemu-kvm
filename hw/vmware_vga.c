@@ -1068,7 +1068,7 @@ static void vmsvga_screen_dump(void *opaque, const char *filename)
         DisplaySurface *ds = qemu_create_displaysurface_from(s->width,
                 s->height, 32, ds_get_linesize(s->vga.ds), s->vga.vram_ptr);
         ppm_save(filename, ds);
-        qemu_free(ds);
+        g_free(ds);
     }
 }
 
@@ -1207,10 +1207,11 @@ static const VMStateDescription vmstate_vmware_vga = {
     }
 };
 
-static void vmsvga_init(struct vmsvga_state_s *s, int vga_ram_size)
+static void vmsvga_init(struct vmsvga_state_s *s, int vga_ram_size,
+                        MemoryRegion *address_space)
 {
     s->scratch_size = SVGA_SCRATCH_SIZE;
-    s->scratch = qemu_malloc(s->scratch_size * 4);
+    s->scratch = g_malloc(s->scratch_size * 4);
 
     s->vga.ds = graphic_console_init(vmsvga_update_display,
                                      vmsvga_invalidate_display,
@@ -1223,7 +1224,7 @@ static void vmsvga_init(struct vmsvga_state_s *s, int vga_ram_size)
     s->fifo_ptr = memory_region_get_ram_ptr(&s->fifo_ram);
 
     vga_common_init(&s->vga, vga_ram_size);
-    vga_init(&s->vga);
+    vga_init(&s->vga, address_space);
     vmstate_register(NULL, 0, &vmstate_vga_common, &s->vga);
 
     vmsvga_reset(s);
@@ -1274,7 +1275,7 @@ static int pci_vmsvga_initfn(PCIDevice *dev)
     MemoryRegion *iomem;
 
 #ifdef DIRECT_VRAM
-    DirectMem *directmem = qemu_malloc(sizeof(*directmem));
+    DirectMem *directmem = g_malloc(sizeof(*directmem));
 
     iomem = &directmem->mr;
     memory_region_init_io(iomem, &vmsvga_vram_io_ops, &s->chip, "vmsvga",
@@ -1293,7 +1294,7 @@ static int pci_vmsvga_initfn(PCIDevice *dev)
                           "vmsvga-io", 0x10);
     pci_register_bar(&s->card, 0, PCI_BASE_ADDRESS_SPACE_IO, &s->io_bar);
 
-    vmsvga_init(&s->chip, VGA_RAM_SIZE);
+    vmsvga_init(&s->chip, VGA_RAM_SIZE, pci_address_space(dev));
 
     pci_register_bar(&s->card, 1, PCI_BASE_ADDRESS_MEM_PREFETCH, iomem);
     pci_register_bar(&s->card, 2, PCI_BASE_ADDRESS_MEM_PREFETCH,
@@ -1301,7 +1302,7 @@ static int pci_vmsvga_initfn(PCIDevice *dev)
 
     if (!dev->rom_bar) {
         /* compatibility with pc-0.13 and older */
-        vga_init_vbe(&s->chip.vga);
+        vga_init_vbe(&s->chip.vga, pci_address_space(dev));
     }
 
     return 0;
