@@ -43,6 +43,7 @@
 #include "blockdev.h"
 #include "ui/qemu-spice.h"
 #include "memory.h"
+#include "exec-memory.h"
 
 /* output Bochs bios info messages */
 //#define DEBUG_BIOS
@@ -966,7 +967,9 @@ void pc_memory_init(MemoryRegion *system_memory,
                     const char *kernel_cmdline,
                     const char *initrd_filename,
                     ram_addr_t below_4g_mem_size,
-                    ram_addr_t above_4g_mem_size)
+                    ram_addr_t above_4g_mem_size,
+                    MemoryRegion *pci_memory,
+                    MemoryRegion **ram_memory)
 {
     char *filename;
     int ret, linux_boot, i;
@@ -984,6 +987,7 @@ void pc_memory_init(MemoryRegion *system_memory,
     ram = g_malloc(sizeof(*ram));
     memory_region_init_ram(ram, NULL, "pc.ram",
                            below_4g_mem_size + above_4g_mem_size);
+    *ram_memory = ram;
     ram_below_4g = g_malloc(sizeof(*ram_below_4g));
     memory_region_init_alias(ram_below_4g, "ram-below-4g", ram,
                              0, below_4g_mem_size);
@@ -1028,7 +1032,7 @@ void pc_memory_init(MemoryRegion *system_memory,
     isa_bios = g_malloc(sizeof(*isa_bios));
     memory_region_init_alias(isa_bios, "isa-bios", bios,
                              bios_size - isa_bios_size, isa_bios_size);
-    memory_region_add_subregion_overlap(system_memory,
+    memory_region_add_subregion_overlap(pci_memory,
                                         0x100000 - isa_bios_size,
                                         isa_bios,
                                         1);
@@ -1036,13 +1040,13 @@ void pc_memory_init(MemoryRegion *system_memory,
 
     option_rom_mr = g_malloc(sizeof(*option_rom_mr));
     memory_region_init_ram(option_rom_mr, NULL, "pc.rom", PC_ROM_SIZE);
-    memory_region_add_subregion_overlap(system_memory,
+    memory_region_add_subregion_overlap(pci_memory,
                                         PC_ROM_MIN_VGA,
                                         option_rom_mr,
                                         1);
 
     /* map all the bios at the top of memory */
-    memory_region_add_subregion(system_memory,
+    memory_region_add_subregion(pci_memory,
                                 (uint32_t)(-bios_size),
                                 bios);
 
@@ -1078,7 +1082,7 @@ void pc_vga_init(PCIBus *pci_bus)
         if (pci_bus) {
             pci_cirrus_vga_init(pci_bus);
         } else {
-            isa_cirrus_vga_init();
+            isa_cirrus_vga_init(get_system_memory());
         }
     } else if (vmsvga_enabled) {
         if (pci_bus) {
