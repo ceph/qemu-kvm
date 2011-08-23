@@ -2277,3 +2277,8 @@ int pci_qdev_find_device(const char *id, PCIDevice **pdev)
 
     return rc;
 }
+
+MemoryRegion *pci_address_space(PCIDevice *dev)
+{
+    return dev->bus->address_space_mem;
+}

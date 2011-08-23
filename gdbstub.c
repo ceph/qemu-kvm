@@ -2194,7 +2194,7 @@ static int gdb_handle_packet(GDBState *s, const char *line_buf)
             hextomem(mem_buf, p + 5, len);
             len = len / 2;
             mem_buf[len++] = 0;
-            qemu_chr_read(s->mon_chr, mem_buf, len);
+            qemu_chr_be_write(s->mon_chr, mem_buf, len);
             put_packet(s, "OK");
             break;
         }
@@ -2499,7 +2499,7 @@ void gdb_exit(CPUState *env, int code)
 
 #ifndef CONFIG_USER_ONLY
   if (s->chr) {
-      qemu_chr_close(s->chr);
+      qemu_chr_delete(s->chr);
   }
 #endif
 }
@@ -2764,7 +2764,7 @@ int gdbserver_start(const char *device)
             sigaction(SIGINT, &act, NULL);
         }
 #endif
-        chr = qemu_chr_open("gdb", device, NULL);
+        chr = qemu_chr_new("gdb", device, NULL);
         if (!chr)
             return -1;
 
@@ -2785,7 +2785,7 @@ int gdbserver_start(const char *device)
         monitor_init(mon_chr, 0);
     } else {
         if (s->chr)
-            qemu_chr_close(s->chr);
+            qemu_chr_delete(s->chr);
         mon_chr = s->mon_chr;
         memset(s, 0, sizeof(GDBState));
     }

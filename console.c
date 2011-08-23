@@ -1102,35 +1102,20 @@ static int console_puts(CharDriverState *chr, const uint8_t *buf, int len)
     return len;
 }
 
-static void console_send_event(CharDriverState *chr, int event)
-{
-    TextConsole *s = chr->opaque;
-    int i;
-
-    if (event == CHR_EVENT_FOCUS) {
-        for(i = 0; i < nb_consoles; i++) {
-            if (consoles[i] == s) {
-                console_select(i);
-                break;
-            }
-        }
-    }
-}
-
 static void kbd_send_chars(void *opaque)
 {
     TextConsole *s = opaque;
     int len;
     uint8_t buf[16];
 
-    len = qemu_chr_can_read(s->chr);
+    len = qemu_chr_be_can_write(s->chr);
     if (len > s->out_fifo.count)
         len = s->out_fifo.count;
     if (len > 0) {
         if (len > sizeof(buf))
             len = sizeof(buf);
         qemu_fifo_read(&s->out_fifo, buf, len);
-        qemu_chr_read(s->chr, buf, len);
+        qemu_chr_be_write(s->chr, buf, len);
     }
     /* characters are pending: we send them a bit later (XXX:
        horrible, should change char device API) */
@@ -1462,7 +1447,6 @@ static void text_console_do_init(CharDriverState *chr, DisplayState *ds)
     s = chr->opaque;
 
     chr->chr_write = console_puts;
-    chr->chr_send_event = console_send_event;
 
     s->out_fifo.buf = s->out_fifo_buf;
     s->out_fifo.buf_size = sizeof(s->out_fifo_buf);
