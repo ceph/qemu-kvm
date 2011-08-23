@@ -39,7 +39,6 @@
 #include "loader.h"
 #include "monitor.h"
 #include "range.h"
-#include <pci/header.h>
 #include "sysemu.h"
 
 #define MSIX_PAGE_SIZE 0x1000
@@ -1140,7 +1139,7 @@ static int assigned_dev_update_msix_mmio(PCIDevice *pci_dev)
     pos = pci_find_capability(pci_dev, PCI_CAP_ID_MSIX);
 
     entries_max_nr = *(uint16_t *)(pci_dev->config + pos + 2);
-    entries_max_nr &= PCI_MSIX_TABSIZE;
+    entries_max_nr &= PCI_MSIX_FLAGS_QSIZE;
     entries_max_nr += 1;
 
     /* Get the usable entry number for allocating */
@@ -1233,7 +1232,7 @@ static void assigned_dev_update_msix(PCIDevice *pci_dev, unsigned int ctrl_pos)
      * try to catch this by only deassigning irqs if the guest is using
      * MSIX or intends to start. */
     if ((assigned_dev->irq_requested_type & KVM_DEV_IRQ_GUEST_MSIX) ||
-        (*ctrl_word & PCI_MSIX_ENABLE)) {
+        (*ctrl_word & PCI_MSIX_FLAGS_ENABLE)) {
 
         assigned_irq_data.flags = assigned_dev->irq_requested_type;
         free_dev_irq_entries(assigned_dev);
@@ -1245,7 +1244,7 @@ static void assigned_dev_update_msix(PCIDevice *pci_dev, unsigned int ctrl_pos)
         assigned_dev->irq_requested_type = 0;
     }
 
-    if (*ctrl_word & PCI_MSIX_ENABLE) {
+    if (*ctrl_word & PCI_MSIX_FLAGS_ENABLE) {
         assigned_irq_data.flags = KVM_DEV_IRQ_HOST_MSIX |
                                   KVM_DEV_IRQ_GUEST_MSIX;
 
@@ -1381,15 +1380,15 @@ static int assigned_device_pci_cap_init(PCIDevice *pci_dev)
 
         pci_set_word(pci_dev->config + pos + PCI_MSIX_FLAGS,
                      pci_get_word(pci_dev->config + pos + PCI_MSIX_FLAGS) &
-                     PCI_MSIX_TABSIZE);
+                     PCI_MSIX_FLAGS_QSIZE);
 
         /* Only enable and function mask bits are writable */
         pci_set_word(pci_dev->wmask + pos + PCI_MSIX_FLAGS,
                      PCI_MSIX_FLAGS_ENABLE | PCI_MSIX_FLAGS_MASKALL);
 
         msix_table_entry = pci_get_long(pci_dev->config + pos + PCI_MSIX_TABLE);
-        bar_nr = msix_table_entry & PCI_MSIX_BIR;
-        msix_table_entry &= ~PCI_MSIX_BIR;
+        bar_nr = msix_table_entry & PCI_MSIX_FLAGS_BIRMASK;
+        msix_table_entry &= ~PCI_MSIX_FLAGS_BIRMASK;
         dev->msix_table_addr = pci_region[bar_nr].base_addr + msix_table_entry;
     }
 

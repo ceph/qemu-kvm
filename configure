@@ -1891,27 +1891,6 @@ else
 fi
 
 ##########################################
-# libpci header probe for kvm_cap_device_assignment
-if test $kvm_cap_device_assignment = "yes" ; then
-  cat > $TMPC << EOF
-#include <pci/header.h>
-#ifndef PCI_VENDOR_ID
-#error NO LIBPCI HEADER
-#endif
-int main(void) { return 0; }
-EOF
-  if compile_prog "" "" ; then
-    kvm_cap_device_assignment=yes
-  else
-    echo
-    echo "Error: libpci header check failed"
-    echo "Disable KVM Device Assignment capability."
-    echo
-    kvm_cap_device_assignment=no
-  fi
-fi
-
-##########################################
 # pthread probe
 PTHREADLIBS_LIST="-pthread -lpthread -lpthreadGC2"
 

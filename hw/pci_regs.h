@@ -44,16 +44,9 @@
 #define PCI_STATUS		0x06	/* 16 bits */
 #define  PCI_STATUS_INTERRUPT	0x08	/* Interrupt status */
 #define  PCI_STATUS_CAP_LIST	0x10	/* Support Capability List */
-
-#ifndef PCI_STATUS_66MHZ
 #define  PCI_STATUS_66MHZ	0x20	/* Support 66 Mhz PCI 2.1 bus */
-#endif
-
 #define  PCI_STATUS_UDF		0x40	/* Support User Definable Features [obsolete] */
-#ifndef PCI_STATUS_FAST_BACK
 #define  PCI_STATUS_FAST_BACK	0x80	/* Accept fast-back to back */
-#endif
-
 #define  PCI_STATUS_PARITY	0x100	/* Detected parity error */
 #define  PCI_STATUS_DEVSEL_MASK	0x600	/* DEVSEL timing */
 #define  PCI_STATUS_DEVSEL_FAST		0x000
