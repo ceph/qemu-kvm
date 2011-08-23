@@ -1059,11 +1059,12 @@ void assigned_dev_update_irqs(void)
     }
 }
 
-static void assigned_dev_update_msi(PCIDevice *pci_dev, unsigned int ctrl_pos)
+static void assigned_dev_update_msi(PCIDevice *pci_dev)
 {
     struct kvm_assigned_irq assigned_irq_data;
     AssignedDevice *assigned_dev = DO_UPCAST(AssignedDevice, dev, pci_dev);
-    uint8_t ctrl_byte = pci_dev->config[ctrl_pos];
+    uint8_t ctrl_byte = pci_get_byte(pci_dev->config + pci_dev->msi_cap +
+                                     PCI_MSI_FLAGS);
     int r;
 
     memset(&assigned_irq_data, 0, sizeof assigned_irq_data);
@@ -1086,13 +1087,13 @@ static void assigned_dev_update_msi(PCIDevice *pci_dev, unsigned int ctrl_pos)
     }
 
     if (ctrl_byte & PCI_MSI_FLAGS_ENABLE) {
-        int pos = ctrl_pos - PCI_MSI_FLAGS;
+        uint8_t *pos = pci_dev->config + pci_dev->msi_cap;
+
         assigned_dev->entry = g_malloc0(sizeof(*(assigned_dev->entry)));
         assigned_dev->entry->u.msi.address_lo =
-            pci_get_long(pci_dev->config + pos + PCI_MSI_ADDRESS_LO);
+            pci_get_long(pos + PCI_MSI_ADDRESS_LO);
         assigned_dev->entry->u.msi.address_hi = 0;
-        assigned_dev->entry->u.msi.data =
-            pci_get_word(pci_dev->config + pos + PCI_MSI_DATA_32);
+        assigned_dev->entry->u.msi.data = pci_get_word(pos + PCI_MSI_DATA_32);
         assigned_dev->entry->type = KVM_IRQ_ROUTING_MSI;
         r = kvm_get_irq_route_gsi();
         if (r < 0) {
@@ -1211,11 +1212,12 @@ static int assigned_dev_update_msix_mmio(PCIDevice *pci_dev)
     return r;
 }
 
-static void assigned_dev_update_msix(PCIDevice *pci_dev, unsigned int ctrl_pos)
+static void assigned_dev_update_msix(PCIDevice *pci_dev)
 {
     struct kvm_assigned_irq assigned_irq_data;
     AssignedDevice *assigned_dev = DO_UPCAST(AssignedDevice, dev, pci_dev);
-    uint16_t *ctrl_word = (uint16_t *)(pci_dev->config + ctrl_pos);
+    uint16_t ctrl_word = pci_get_word(pci_dev->config + pci_dev->msix_cap +
+                                      PCI_MSIX_FLAGS);
     int r;
 
     memset(&assigned_irq_data, 0, sizeof assigned_irq_data);
@@ -1225,7 +1227,7 @@ static void assigned_dev_update_msix(PCIDevice *pci_dev, unsigned int ctrl_pos)
      * try to catch this by only deassigning irqs if the guest is using
      * MSIX or intends to start. */
     if ((assigned_dev->irq_requested_type & KVM_DEV_IRQ_GUEST_MSIX) ||
-        (*ctrl_word & PCI_MSIX_FLAGS_ENABLE)) {
+        (ctrl_word & PCI_MSIX_FLAGS_ENABLE)) {
 
         assigned_irq_data.flags = assigned_dev->irq_requested_type;
         free_dev_irq_entries(assigned_dev);
@@ -1237,7 +1239,7 @@ static void assigned_dev_update_msix(PCIDevice *pci_dev, unsigned int ctrl_pos)
         assigned_dev->irq_requested_type = 0;
     }
 
-    if (*ctrl_word & PCI_MSIX_FLAGS_ENABLE) {
+    if (ctrl_word & PCI_MSIX_FLAGS_ENABLE) {
         assigned_irq_data.flags = KVM_DEV_IRQ_HOST_MSIX |
                                   KVM_DEV_IRQ_GUEST_MSIX;
 
@@ -1301,21 +1303,20 @@ static void assigned_device_pci_cap_write_config(PCIDevice *pci_dev,
                                                  uint32_t val, int len)
 {
     uint8_t cap_id = pci_dev->config_map[address];
-    uint8_t cap;
 
     pci_default_write_config(pci_dev, address, val, len);
     switch (cap_id) {
     case PCI_CAP_ID_MSI:
-        cap = pci_find_capability(pci_dev, cap_id);
-        if (ranges_overlap(address - cap, len, PCI_MSI_FLAGS, 1)) {
-            assigned_dev_update_msi(pci_dev, cap + PCI_MSI_FLAGS);
+        if (range_covers_byte(address, len,
+                              pci_dev->msi_cap + PCI_MSI_FLAGS)) {
+            assigned_dev_update_msi(pci_dev);
         }
         break;
 
     case PCI_CAP_ID_MSIX:
-        cap = pci_find_capability(pci_dev, cap_id);
-        if (ranges_overlap(address - cap, len, PCI_MSIX_FLAGS + 1, 1)) {
-            assigned_dev_update_msix(pci_dev, cap + PCI_MSIX_FLAGS);
+        if (range_covers_byte(address, len,
+                              pci_dev->msix_cap + PCI_MSIX_FLAGS + 1)) {
+            assigned_dev_update_msix(pci_dev);
         }
         break;
 
@@ -1347,6 +1348,7 @@ static int assigned_device_pci_cap_init(PCIDevice *pci_dev)
         if ((ret = pci_add_capability(pci_dev, PCI_CAP_ID_MSI, pos, 10)) < 0) {
             return ret;
         }
+        pci_dev->msi_cap = pos;
 
         pci_set_word(pci_dev->config + pos + PCI_MSI_FLAGS,
                      pci_get_word(pci_dev->config + pos + PCI_MSI_FLAGS) &
@@ -1370,6 +1372,7 @@ static int assigned_device_pci_cap_init(PCIDevice *pci_dev)
         if ((ret = pci_add_capability(pci_dev, PCI_CAP_ID_MSIX, pos, 12)) < 0) {
             return ret;
         }
+        pci_dev->msix_cap = pos;
 
         pci_set_word(pci_dev->config + pos + PCI_MSIX_FLAGS,
                      pci_get_word(pci_dev->config + pos + PCI_MSIX_FLAGS) &
