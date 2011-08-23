@@ -631,7 +631,7 @@ int paio_init(void)
     if (posix_aio_state)
         return 0;
 
-    s = qemu_malloc(sizeof(PosixAioState));
+    s = g_malloc(sizeof(PosixAioState));
 
     /* Make sure to block AIO signal */
     sigemptyset(&mask);

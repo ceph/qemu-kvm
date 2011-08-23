@@ -333,10 +333,10 @@ int msix_init(struct PCIDevice *dev, unsigned short nentries,
         return -EINVAL;
 
     dev->msix_mask_notifier = NULL;
-    dev->msix_entry_used = qemu_mallocz(MSIX_MAX_ENTRIES *
+    dev->msix_entry_used = g_malloc0(MSIX_MAX_ENTRIES *
                                         sizeof *dev->msix_entry_used);
 
-    dev->msix_table_page = qemu_mallocz(MSIX_PAGE_SIZE);
+    dev->msix_table_page = g_malloc0(MSIX_PAGE_SIZE);
     msix_mask_all(dev, nentries);
 
     memory_region_init_io(&dev->msix_mmio, &msix_mmio_ops, dev,
@@ -359,9 +359,9 @@ int msix_init(struct PCIDevice *dev, unsigned short nentries,
 err_config:
     dev->msix_entries_nr = 0;
     memory_region_destroy(&dev->msix_mmio);
-    qemu_free(dev->msix_table_page);
+    g_free(dev->msix_table_page);
     dev->msix_table_page = NULL;
-    qemu_free(dev->msix_entry_used);
+    g_free(dev->msix_entry_used);
     dev->msix_entry_used = NULL;
     return ret;
 }
@@ -391,9 +391,9 @@ int msix_uninit(PCIDevice *dev, MemoryRegion *bar)
     dev->msix_entries_nr = 0;
     memory_region_del_subregion(bar, &dev->msix_mmio);
     memory_region_destroy(&dev->msix_mmio);
-    qemu_free(dev->msix_table_page);
+    g_free(dev->msix_table_page);
     dev->msix_table_page = NULL;
-    qemu_free(dev->msix_entry_used);
+    g_free(dev->msix_entry_used);
     dev->msix_entry_used = NULL;
     qemu_free(dev->msix_irq_entries);
     dev->msix_irq_entries = NULL;
