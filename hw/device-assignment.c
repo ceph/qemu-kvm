@@ -850,9 +850,10 @@ static void free_assigned_device(AssignedDevice *dev)
     free_dev_irq_entries(dev);
 }
 
-static uint32_t calc_assigned_dev_id(uint16_t seg, uint8_t bus, uint8_t devfn)
+static uint32_t calc_assigned_dev_id(AssignedDevice *dev)
 {
-    return (uint32_t)seg << 16 | (uint32_t)bus << 8 | (uint32_t)devfn;
+    return (uint32_t)dev->h_segnr << 16 | (uint32_t)dev->h_busnr << 8 |
+           (uint32_t)dev->h_devfn;
 }
 
 static void assign_failed_examine(AssignedDevice *dev)
@@ -916,8 +917,7 @@ static int assign_device(AssignedDevice *dev)
     }
 
     memset(&assigned_dev_data, 0, sizeof(assigned_dev_data));
-    assigned_dev_data.assigned_dev_id  =
-	calc_assigned_dev_id(dev->h_segnr, dev->h_busnr, dev->h_devfn);
+    assigned_dev_data.assigned_dev_id = calc_assigned_dev_id(dev);
     assigned_dev_data.segnr = dev->h_segnr;
     assigned_dev_data.busnr = dev->h_busnr;
     assigned_dev_data.devfn = dev->h_devfn;
@@ -974,8 +974,7 @@ static int assign_irq(AssignedDevice *dev)
         return r;
 
     memset(&assigned_irq_data, 0, sizeof(assigned_irq_data));
-    assigned_irq_data.assigned_dev_id =
-        calc_assigned_dev_id(dev->h_segnr, dev->h_busnr, dev->h_devfn);
+    assigned_irq_data.assigned_dev_id = calc_assigned_dev_id(dev);
     assigned_irq_data.guest_irq = irq;
     assigned_irq_data.host_irq = dev->real_device.irq;
     if (dev->irq_requested_type) {
@@ -1014,8 +1013,7 @@ static void deassign_device(AssignedDevice *dev)
     int r;
 
     memset(&assigned_dev_data, 0, sizeof(assigned_dev_data));
-    assigned_dev_data.assigned_dev_id  =
-	calc_assigned_dev_id(dev->h_segnr, dev->h_busnr, dev->h_devfn);
+    assigned_dev_data.assigned_dev_id = calc_assigned_dev_id(dev);
 
     r = kvm_deassign_pci_device(kvm_state, &assigned_dev_data);
     if (r < 0)
@@ -1069,9 +1067,7 @@ static void assigned_dev_update_msi(PCIDevice *pci_dev, unsigned int ctrl_pos)
     int r;
 
     memset(&assigned_irq_data, 0, sizeof assigned_irq_data);
-    assigned_irq_data.assigned_dev_id  =
-        calc_assigned_dev_id(assigned_dev->h_segnr, assigned_dev->h_busnr,
-                (uint8_t)assigned_dev->h_devfn);
+    assigned_irq_data.assigned_dev_id = calc_assigned_dev_id(assigned_dev);
 
     /* Some guests gratuitously disable MSI even if they're not using it,
      * try to catch this by only deassigning irqs if the guest is using
@@ -1156,8 +1152,7 @@ static int assigned_dev_update_msix_mmio(PCIDevice *pci_dev)
         fprintf(stderr, "MSI-X entry number is zero!\n");
         return -EINVAL;
     }
-    msix_nr.assigned_dev_id = calc_assigned_dev_id(adev->h_segnr, adev->h_busnr,
-                                          (uint8_t)adev->h_devfn);
+    msix_nr.assigned_dev_id = calc_assigned_dev_id(adev);
     msix_nr.entry_nr = entries_nr;
     r = kvm_assign_set_msix_nr(kvm_state, &msix_nr);
     if (r != 0) {
@@ -1224,9 +1219,7 @@ static void assigned_dev_update_msix(PCIDevice *pci_dev, unsigned int ctrl_pos)
     int r;
 
     memset(&assigned_irq_data, 0, sizeof assigned_irq_data);
-    assigned_irq_data.assigned_dev_id  =
-            calc_assigned_dev_id(assigned_dev->h_segnr, assigned_dev->h_busnr,
-                    (uint8_t)assigned_dev->h_devfn);
+    assigned_irq_data.assigned_dev_id = calc_assigned_dev_id(assigned_dev);
 
     /* Some guests gratuitously disable MSIX even if they're not using it,
      * try to catch this by only deassigning irqs if the guest is using
