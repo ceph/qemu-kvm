@@ -3116,6 +3116,11 @@ int main(int argc, char **argv, char **envp)
         exit(1);
     }
 
+    /* init the memory */
+    if (ram_size == 0) {
+        ram_size = DEFAULT_RAM_SIZE * 1024 * 1024;
+    }
+
     configure_accelerator();
 
     if (qemu_init_main_loop()) {
@@ -3149,11 +3154,6 @@ int main(int argc, char **argv, char **envp)
     /* init the bluetooth world */
     if (foreach_device_config(DEV_BT, bt_parse))
         exit(1);
-
-    /* init the memory */
-    if (ram_size == 0) {
-        ram_size = DEFAULT_RAM_SIZE * 1024 * 1024;
-    }
 
     if (!xen_enabled()) {
         /* On 32-bit hosts, QEMU is limited by virtual address space */
