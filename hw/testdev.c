@@ -14,7 +14,7 @@ static void test_device_serial_write(void *opaque, uint32_t addr, uint32_t data)
     uint8_t buf[1] = { data };
 
     if (dev->chr) {
-        qemu_chr_write(dev->chr, buf, 1);
+        qemu_chr_fe_write(dev->chr, buf, 1);
     }
 }
 

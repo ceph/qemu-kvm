@@ -68,7 +68,7 @@ static void tcg_target_qemu_prologue(TCGContext *s);
 static void patch_reloc(uint8_t *code_ptr, int type, 
                         tcg_target_long value, tcg_target_long addend);
 
-static TCGOpDef tcg_op_defs[] = {
+TCGOpDef tcg_op_defs[] = {
 #define DEF(s, oargs, iargs, cargs, flags) { #s, oargs, iargs, cargs, iargs + oargs + cargs, flags },
 #include "tcg-opc.h"
 #undef DEF
@@ -2124,6 +2124,10 @@ static inline int tcg_gen_code_common(TCGContext *s, uint8_t *gen_code_buf,
         case INDEX_op_end:
             goto the_end;
         default:
+            /* Sanity check that we've not introduced any unhandled opcodes. */
+            if (def->flags & TCG_OPF_NOT_PRESENT) {
+                tcg_abort();
+            }
             /* Note: in order to speed up the code, it would be much
                faster to have specialized register allocator functions for
                some common argument patterns */
