@@ -623,6 +623,7 @@ static int compare_sectors(const uint8_t *buf1, const uint8_t *buf2, int n,
 
 #define IO_BUF_SIZE (2 * 1024 * 1024)
 #define IO_WRITE_WINDOW_THRESHOLD (32 * 1024 * 1024)
+#define IO_WRITE_MIN_SIZE (128 * 1024)
 
 static int write_window = 0;
 
@@ -991,6 +992,7 @@ static int img_convert(int argc, char **argv)
                should add a specific call to have the info to go faster */
             buf1 = buf;
             while (n > 0) {
+                int is_allocated = is_allocated_sectors(buf1, n, &n1);
                 while (write_window > IO_WRITE_WINDOW_THRESHOLD / 512) {
                     qemu_aio_wait();
                 }
@@ -1001,8 +1003,8 @@ static int img_convert(int argc, char **argv)
                    If the output is to a host device, we also write out
                    sectors that are entirely 0, since whatever data was
                    already there is garbage, not 0s. */
-                if (!has_zero_init || out_baseimg ||
-                    is_allocated_sectors(buf1, n, &n1)) {
+                if (is_allocated || n != n1 || !has_zero_init || out_baseimg) {
+                    n1 = MAX(n1, MIN(n, IO_WRITE_MIN_SIZE / 512));
                     QEMUIOVector *qiov = qemu_mallocz(sizeof(QEMUIOVector));
 		    qemu_iovec_init(qiov, 1);
 		    qemu_iovec_add(qiov, (void *)buf1, n1 * 512);
